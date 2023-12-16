@@ -1,0 +1,14 @@
+# Ignore all log files
+*.log
+
+# Ignore the local configuration directory
+local_config/
+
+# Ignore the .git directory
+.git/
+
+# Ignore the .sh directory
+*.sh
+
+# Ignore the .md directory
+*.md
