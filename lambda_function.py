@@ -1,16 +1,17 @@
+import os
 import sys
 import logging
 import json
 import base64
 import pandas as pd
 import io
+import psycopg2
 
 from requests_toolbelt.multipart import decoder
 logging.getLogger().setLevel(logging.DEBUG)
 
 def handler(event, context):
     logging.warning(f"ℹ️🤖LLM Inference generator...")
-    logging.warning(f'ℹ️🔔' +  sys.version + '!' )
     logging.info(f'ℹ️🔔' +  sys.version + '!' )
     logging.info(f'Body is: {event}')
     _uploadFiles(event['body-json'])
@@ -53,10 +54,48 @@ def _getFileName(headers):
 def _toDF(filename,text):
     logging.info(f'🔔To DF... filename: {filename}')
     data = io.StringIO(text)
-    df = pd.read_csv(data)
+    df = pd.read_csv(data,dtype='str')
     logging.info(f'🔔DF shape: {df.shape}')
-    
+    return df    
 
+
+def _saveToDB(filename,df):
+    
+    conn = psycopg2.connect(
+            dbname=os.environ.get("DB_NAME"), 
+            user=os.environ.get("DB_USER"), 
+            password=os.environ.get("DB_PASSWORD"), 
+            host=os.environ.get("DB_HOST"), 
+            port=os.environ.get("DB_P0RT")
+        )
+    
+    cursor = conn.cursor()
+    
+    if filename.contains("hired_employees"):
+        insert_query = os.environ.get("INSERT_QUERY_HIRED_EMPL")
+    
+    elif filename.contains("departments"):
+        insert_query = os.environ.get("INSERT_QUERY_DEPT")
+        
+    elif filename.contains("jobs"):
+        insert_query = os.environ.get("INSERT_QUERY_JOBS")
+    
+    data_to_insert = [tuple(x) for x in df.values]
+    
+    try:
+        batch_size = 1000
+        for i in range(0, len(data_to_insert), batch_size):
+            batch = data_to_insert[i:i+batch_size]
+            cursor.executemany(insert_query, batch)
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        logging.error("Error:", e)
+
+    finally:
+        cursor.close()
+        conn.close()
 
 
 
